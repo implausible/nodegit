@@ -994,34 +994,46 @@ static int http_close(git_smart_subtransport *subtransport)
 	git_http_auth_context *context;
 	size_t i;
 
+	printf("Before clear_parser_state\n");
 	clear_parser_state(t);
+	printf("After clear_parser_state\n");
 
 	if (t->io) {
+		printf("close stream\n");
 		git_stream_close(t->io);
+		printf("free stream\n");
 		git_stream_free(t->io);
+		printf("stream is safe?\n");
 		t->io = NULL;
 	}
 
 	if (t->cred) {
+		printf("before t->cred->free\n");
 		t->cred->free(t->cred);
+		printf("after t->cred->free\n");
 		t->cred = NULL;
 	}
 
 	if (t->url_cred) {
+		printf("before t->url_cred->free\n");
 		t->url_cred->free(t->url_cred);
+		printf("after t->url_cred->free\n");
 		t->url_cred = NULL;
 	}
 
+	printf("before context->free(context)\n");
 	git_vector_foreach(&t->auth_contexts, i, context) {
 		if (context->free)
 			context->free(context);
 	}
+	printf("after context->free(context)\n");
 
 	git_vector_clear(&t->auth_contexts);
 
+	printf("before gitno_connection_data_free_ptrs\n");
 	gitno_connection_data_free_ptrs(&t->connection_data);
 	memset(&t->connection_data, 0x0, sizeof(gitno_connection_data));
-
+	printf("after gitno_connection_data_free_ptrs")
 	return 0;
 }
 
