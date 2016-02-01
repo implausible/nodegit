@@ -725,13 +725,13 @@ static int _ssh_close(git_smart_subtransport *subtransport)
 {
 	ssh_subtransport *t = (ssh_subtransport *) subtransport;
 
-	printf("before assertion\n");
+	printf("before assertion\n\n\n");
 	assert(!t->current_stream);
-	printf("after assertion\n");
+	printf("after assertion\n\n\n");
 
-	printf("before GIT_UNUSED\n");
+	printf("before GIT_UNUSED\n\n\n");
 	GIT_UNUSED(t);
-	printf("after GIT_UNUSED\n");
+	printf("after GIT_UNUSED\n\n\n");
 
 	return 0;
 }
