@@ -3,6 +3,7 @@ var path = require("path");
 var local = path.join.bind(path, __dirname);
 
 var garbageCollect = require("../utils/garbage_collect.js");
+var createSingleUseProxy = require("../utils/createSingleUseProxy");
 
 describe("Remote", function() {
   var NodeGit = require("../../");
@@ -187,6 +188,41 @@ describe("Remote", function() {
         }
       }
     });
+  });
+
+  it.only("can fetch from a remote via proxy", function() {
+    var options = {
+      callbacks: {
+        credentials: function(url, userName) {
+          return NodeGit.Cred.sshKeyFromAgent(userName);
+        },
+        certificateCheck: function() {
+          return 1;
+        }
+      },
+      proxyOpts: {
+        type: NodeGit.Proxy.PROXY.SPECIFIED,
+        url: "https://localhost:8080"
+      }
+    };
+    var repository = this.repository;
+
+    return createSingleUseProxy(true)
+      .then(function(proxyControls) {
+        return repository.fetch("origin", options)
+          .then(function() {
+            assert.ok(
+              proxyControls.getProxyWasUsed(),
+              "Failed to use proxy server when fetching remote"
+            );
+            proxyControls.close();
+          })
+          .catch(function(error) {
+            console.log(error);
+            assert.fail("Failed to fetch via proxy");
+            proxyControls.close();
+          });
+      });
   });
 
   it("can fetch from a private repository", function() {

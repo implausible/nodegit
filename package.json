@@ -48,6 +48,7 @@
     "clean-for-publish": "~1.0.2",
     "combyne": "~0.8.1",
     "coveralls": "~2.11.4",
+    "http-proxy": "^1.16.2",
     "istanbul": "~0.3.20",
     "js-beautify": "~1.5.10",
     "jshint": "~2.8.0",
