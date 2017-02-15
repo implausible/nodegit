@@ -90,7 +90,15 @@
           }
         ],
         [
-          "OS=='linux' or OS=='mac'", {
+          "OS=='linux'", {
+            "libraries": [
+              "-l:libcurl.a",
+              "-lgssapi_krb5"
+            ]
+          }
+        ],
+        [
+          "OS=='mac'", {
             "libraries": [
               "-lcurl"
             ]
