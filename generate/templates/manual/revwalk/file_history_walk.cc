@@ -67,10 +67,7 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
 
     numParents = git_commit_parentcount(commit);
 
-    if (numParents > 1) {
-      git_commit_free(commit);
-      continue;
-    } else if (numParents == 1) {
+    if (numParents >= 1) {
       if ((baton->error_code = git_commit_parent(&parent, commit, 0)) < GIT_OK) {
         git_commit_free(commit);
         break;
