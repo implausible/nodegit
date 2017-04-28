@@ -44,12 +44,12 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
     // check if this commit has the file
     git_commit *nextCommit;
 
-    if ((baton->error_code = git_commit_lookup(&nextCommit, repo, nextOid)) != GIT_OK) {
+    if ((baton->error_code = git_commit_lookup(&nextCommit, repo, nextOid)) < GIT_OK) {
       break;
     }
 
     git_tree *thisTree, *parentTree;
-    if ((baton->error_code = git_commit_tree(&thisTree, nextCommit)) != GIT_OK) {
+    if ((baton->error_code = git_commit_tree(&thisTree, nextCommit)) < GIT_OK) {
       git_commit_free(nextCommit);
       break;
     }
@@ -65,20 +65,20 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
       git_commit_free(nextCommit);
       continue;
     } else if (parents == 1) {
-      if ((baton->error_code = git_commit_parent(&parent, nextCommit, 0)) != GIT_OK) {
+      if ((baton->error_code = git_commit_parent(&parent, nextCommit, 0)) < GIT_OK) {
         git_commit_free(nextCommit);
         break;
       }
       if (
-        (baton->error_code = git_commit_tree(&parentTree, parent)) != GIT_OK ||
-        (baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, &opts)) != GIT_OK
+        (baton->error_code = git_commit_tree(&parentTree, parent)) < GIT_OK ||
+        (baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, &opts)) < GIT_OK
       ) {
         git_commit_free(nextCommit);
         git_commit_free(parent);
         break;
       }
     } else {
-      if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, NULL, thisTree, &opts)) != GIT_OK) {
+      if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, NULL, thisTree, &opts)) < GIT_OK) {
         git_commit_free(nextCommit);
         break;
       }
@@ -139,20 +139,20 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
       git_diff_free(diffs);
 
       if (parents == 1) {
-        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, NULL)) != GIT_OK) {
+        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, NULL)) < GIT_OK) {
           git_commit_free(nextCommit);
           break;
         }
-        if ((baton->error_code = git_diff_find_similar(diffs, NULL)) != GIT_OK) {
+        if ((baton->error_code = git_diff_find_similar(diffs, NULL)) < GIT_OK) {
           git_commit_free(nextCommit);
           break;
         }
       } else {
-        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, NULL, thisTree, NULL)) != GIT_OK) {
+        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, NULL, thisTree, NULL)) < GIT_OK) {
           git_commit_free(nextCommit);
           break;
         }
-        if((baton->error_code = git_diff_find_similar(diffs, NULL)) != GIT_OK) {
+        if((baton->error_code = git_diff_find_similar(diffs, NULL)) < GIT_OK) {
           git_commit_free(nextCommit);
           break;
         }
@@ -224,14 +224,14 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
       git_commit_free(nextCommit);
     }
 
-    if (baton->error_code != GIT_OK) {
+    if (baton->error_code < GIT_OK) {
       break;
     }
   }
 
   free(nextOid);
 
-  if (baton->error_code != GIT_OK) {
+  if (baton->error_code < GIT_OK) {
     if (baton->error_code != GIT_ITEROVER) {
       baton->error = git_error_dup(giterr_last());
 
