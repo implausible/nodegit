@@ -50,6 +50,9 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
     git_commit *commit, *parent;
     git_diff *diffs;
     git_tree *thisTree, *parentTree;
+    git_patch *patch;
+    const git_diff_delta *delta;
+    std::pair<git_commit *, std::pair<char *, git_delta_t> > *historyEntry;
     unsigned int numDeltas, numParents;
     bool flag = false, doRenamedPass = false;
 
@@ -90,13 +93,9 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
     numDeltas = git_diff_num_deltas(diffs);
 
     for (unsigned int deltaIndex = 0; deltaIndex < numDeltas; ++deltaIndex) {
-      git_patch *patch;
-      const git_diff_delta *delta;
-      std::pair<git_commit *, std::pair<char *, git_delta_t> > *historyEntry;
+      patch = NULL;
 
-      baton->error_code = git_patch_from_diff(&patch, diffs, deltaIndex);
-
-      if (baton->error_code < GIT_OK) {
+      if ((baton->error_code = git_patch_from_diff(&patch, diffs, deltaIndex)) < GIT_OK) {
         break;
       }
 
@@ -136,42 +135,27 @@ void GitRevwalk::FileHistoryWalkWorker::Execute()
       }
     }
 
-    if (doRenamedPass) {
+    if (numParents >= 1 && doRenamedPass) {
       git_diff_free(diffs);
 
-      if (parents == 1) {
-        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, NULL)) < GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
-        if ((baton->error_code = git_diff_find_similar(diffs, NULL)) < GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
-      } else {
-        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, NULL, thisTree, NULL)) < GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
-        if ((baton->error_code = git_diff_find_similar(diffs, NULL)) < GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
+      if (
+        (baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, NULL)) < GIT_OK
+        || (baton->error_code = git_diff_find_similar(diffs, NULL)) < GIT_OK
+      ) {
+        git_commit_free(commit);
+        break;
       }
 
       flag = false;
       numDeltas = git_diff_num_deltas(diffs);
 
       for (unsigned int deltaIndex = 0; deltaIndex < numDeltas; ++deltaIndex) {
-        git_patch *patch;
-        const git_diff_delta *delta;
         int oldLen, newLen;
         char *outPair;
-        std::pair<git_commit *, std::pair<char *, git_delta_t> > *historyEntry;
 
-        baton->error_code = git_patch_from_diff(&patch, diffs, deltaIndex);
+        patch = NULL;
 
-        if (baton->error_code < GIT_OK) {
+        if ((baton->error_code = git_patch_from_diff(&patch, diffs, deltaIndex)) < GIT_OK) {
           break;
         }
 
