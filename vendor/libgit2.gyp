@@ -25,7 +25,6 @@
       "dependencies": [
         "zlib",
         "http_parser/http_parser.gyp:http_parser",
-        "openssl/openssl.gyp:openssl",
         "libssh2"
       ],
       "sources": [
@@ -427,7 +426,8 @@
       ],
       "include_dirs": [
         "libgit2/include",
-        "libgit2/src"
+        "libgit2/src",
+        "<(node_root_dir)/deps/openssl/openssl/include"
       ],
       "direct_dependent_settings": {
         "include_dirs": [
@@ -480,10 +480,26 @@
       },
     },
     {
+      "target_name": "libssh2_configure",
+      "type": "none",
+      "toolsets": ["host"],
+      "actions": [
+        {
+          "action_name": "configure",
+          "inputs": ["configureLibssh2.js"],
+          "outputs": ["libssh2/configured"],
+          "action": ["node", "configureLibssh2.js", "<(node_root_dir)/deps/openssl/openssl"]
+        }
+      ],
+    },
+    {
       "target_name": "libssh2",
       "type": "static_library",
       "defines": [
         "NETSNMP_ENABLE_IPV6"
+      ],
+      "dependencies": [
+        "libssh2_configure#host"
       ],
       "sources": [
         "libssh2/src/agent.c",
@@ -512,9 +528,7 @@
       "include_dirs": [
         ".",
         "libssh2/include",
-      ],
-      "dependencies": [
-        "openssl/openssl.gyp:openssl"
+        "<(node_root_dir)/deps/openssl/openssl/include"
       ],
       "direct_dependent_settings": {
         "include_dirs": [

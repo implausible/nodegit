@@ -6,14 +6,14 @@ var rooted = function (dir) {
   return escapedPathForShell;
 };
 
-module.exports = function retrieveExternalDependencies() {
-  if (process.platform === "win32") {
-    return Promise.resolve("");
-  }
+if (process.argv.length < 3) {
+  console.log('Requires path to openssl library');
+  process.exit(1);
+}
 
+function retrieveExternalDependencies() {
   return new Promise(function(resolve, reject) {
-    console.info("[nodegit] Configuring libssh2.");
-    var opensslDir = rooted("vendor/openssl/openssl");
+    var opensslDir = process.argv[2];
     var newEnv = {};
     Object.keys(process.env).forEach(function(key) {
       newEnv[key] = process.env[key];
@@ -40,12 +40,10 @@ module.exports = function retrieveExternalDependencies() {
   });
 };
 
-// Called on the command line
-if (require.main === module) {
-  if (process.platform === "win32") {
-    console.log("nothing to do");
-  }
-  else {
-    module.exports().done();
-  }
-}
+retrieveExternalDependencies()
+  .then(function () {
+    process.exit(0);
+  })
+  .catch(function() {
+    process.exit(1);
+  });
