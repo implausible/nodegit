@@ -242,6 +242,32 @@
           "isErrorCode": true
         }
       },
+      "git_repository_get_references_from_list": {
+        "args": [
+          {
+            "name": "out",
+            "type": "std::vector<git_reference *> *"
+          },
+          {
+            "name": "ref_list",
+            "type": "std::vector<const char *> *"
+          },
+          {
+            "name": "repo",
+            "type": "git_repository *"
+          }
+        ],
+        "type": "function",
+        "isManual": true,
+        "cFile": "generate/templates/manual/repository/get_references_from_list.cc",
+        "isAsync": true,
+        "isPrototypeMethod": true,
+        "group": "repository",
+        "return": {
+          "type": "int",
+          "isErrorCode": true
+        }
+      },
       "git_repository_get_remotes": {
         "args": [
           {
@@ -490,6 +516,7 @@
         "repository",
         [
           "git_repository_get_references",
+          "git_repository_get_references_from_list",
           "git_repository_get_remotes"
         ]
       ],
