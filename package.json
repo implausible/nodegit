@@ -94,7 +94,7 @@
     "rebuildDebug": "node generate && npm run babel && node-gyp configure --debug build",
     "recompile": "node-gyp configure build",
     "recompileDebug": "node-gyp configure --debug build",
-    "test": "npm run lint && node --expose-gc test",
+    "test": "node --expose-gc test",
     "xcodeDebug": "node-gyp configure -- -f xcode"
   }
 }

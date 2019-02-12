@@ -30,12 +30,11 @@ describe("Tree", function() {
     return fse.remove(repoPath);
   });
 
-  it("gets an entry by name",
-  function(done) {
-    this.commit.getTree().then(function(tree) {
+  it("gets an entry by name", function() {
+    return this.commit.getTree().then(function(tree) {
       var entry = tree.entryByName("README.md");
         assert(entry);
-    }).done(done);
+    });
   });
 
   it("walks its entries and returns the same entries on both progress and end",
