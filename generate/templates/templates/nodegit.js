@@ -1,19 +1,20 @@
-var _ = require("lodash");
-var promisify = require("promisify-node");
-var rawApi;
+/* eslint-disable brace-style, eol-last, global-require, import/no-dynamic-require, import/no-unresolved, no-unused-vars, max-len */
+const _ = require('lodash');
+const promisify = require('promisify-node');
+
+let rawApi;
 
 // Attempt to load the production release first, if it fails fall back to the
 // debug release.
 try {
-  rawApi = require("../build/Release/nodegit.node");
-}
-catch (ex) {
+  rawApi = require('../build/Release/nodegit.node');
+} catch (ex) {
   /* istanbul ignore next */
-  if (ex.code !== "MODULE_NOT_FOUND") {
+  if (ex.code !== 'MODULE_NOT_FOUND') {
     throw ex;
   }
 
-  rawApi = require("../build/Debug/nodegit.node");
+  rawApi = require('../build/Debug/nodegit.node');
 }
 
 // For disccussion on why `cloneDeep` is required, see:
@@ -26,11 +27,10 @@ rawApi = _.cloneDeep(rawApi);
 // have to override them here
 /* jshint ignore:start */
 {% each . as idef %}
-  {% if idef.type != "enum" %}
+  {% if idef.type != 'enum' %}
 
     {% if idef.functions.length > 0 %}
-      var _{{ idef.jsClassName }}
-        = rawApi.{{ idef.jsClassName }};
+      const _{{ idef.jsClassName }} = rawApi.{{ idef.jsClassName }};
     {% endif %}
 
     {% each idef.functions as fn %}
@@ -38,17 +38,17 @@ rawApi = _.cloneDeep(rawApi);
 
         {% if fn.isPrototypeMethod %}
 
-          var _{{ idef.jsClassName }}_{{ fn.jsFunctionName}}
-            = _{{ idef.jsClassName }}.prototype.{{ fn.jsFunctionName }};
-          _{{ idef.jsClassName }}.prototype.{{ fn.jsFunctionName }}
-            = promisify(_{{ idef.jsClassName }}_{{ fn.jsFunctionName}});
+          const _{{ idef.jsClassName }}_{{ fn.jsFunctionName}} = _{{ idef.jsClassName }}.prototype.{{ fn.jsFunctionName }};
+          _{{ idef.jsClassName }}.prototype.{{ fn.jsFunctionName }} = promisify(
+            _{{ idef.jsClassName }}_{{ fn.jsFunctionName}},
+          );
 
         {% else %}
 
-          var _{{ idef.jsClassName }}_{{ fn.jsFunctionName}}
-            = _{{ idef.jsClassName }}.{{ fn.jsFunctionName }};
-          _{{ idef.jsClassName }}.{{ fn.jsFunctionName }}
-            = promisify(_{{ idef.jsClassName }}_{{ fn.jsFunctionName}});
+          const _{{ idef.jsClassName }}_{{ fn.jsFunctionName}} = _{{ idef.jsClassName }}.{{ fn.jsFunctionName }};
+          _{{ idef.jsClassName }}.{{ fn.jsFunctionName }} = promisify(
+            _{{ idef.jsClassName }}_{{ fn.jsFunctionName}},
+          );
 
         {% endif %}
 
@@ -58,32 +58,31 @@ rawApi = _.cloneDeep(rawApi);
   {% endif %}
 {% endeach %}
 
-var _ConvenientPatch = rawApi.ConvenientPatch;
-var _ConvenientPatch_hunks = _ConvenientPatch.prototype.hunks;
+const _ConvenientPatch = rawApi.ConvenientPatch;
+const _ConvenientPatch_hunks = _ConvenientPatch.prototype.hunks;
 _ConvenientPatch.prototype.hunks = promisify(_ConvenientPatch_hunks);
 
-var _ConvenientHunk = rawApi.ConvenientHunk;
-var _ConvenientHunk_lines = _ConvenientHunk.prototype.lines;
+const _ConvenientHunk = rawApi.ConvenientHunk;
+const _ConvenientHunk_lines = _ConvenientHunk.prototype.lines;
 _ConvenientHunk.prototype.lines = promisify(_ConvenientHunk_lines);
 
-var _FilterRegistry = rawApi.FilterRegistry;
-var _FilterRegistry_register = _FilterRegistry.register;
+const _FilterRegistry = rawApi.FilterRegistry;
+const _FilterRegistry_register = _FilterRegistry.register;
 _FilterRegistry.register = promisify(_FilterRegistry_register);
 
-var _FilterRegistry_unregister = _FilterRegistry.unregister;
+const _FilterRegistry_unregister = _FilterRegistry.unregister;
 _FilterRegistry.unregister = promisify(_FilterRegistry_unregister);
 
 /* jshint ignore:end */
 
 // Set the exports prototype to the raw API.
-exports.__proto__ = rawApi;
+Object.setPrototypeOf(exports, rawApi);
 
-var importExtension = function(name) {
+const importExtension = (name) => {
   try {
-    require("./" + name);
-  }
-  catch (unhandledException) {
-    if (unhandledException.code != "MODULE_NOT_FOUND") {
+    require(`./${name}`);
+  } catch (unhandledException) {
+    if (unhandledException.code !== 'MODULE_NOT_FOUND') {
       throw unhandledException;
     }
   }
@@ -91,40 +90,40 @@ var importExtension = function(name) {
 
 // Load up utils
 rawApi.Utils = {};
-require("./utils/lookup_wrapper");
-require("./utils/normalize_options");
-require("./utils/shallow_clone");
-require("./utils/normalize_fetch_options");
+require('./utils/lookup_wrapper');
+require('./utils/normalize_options');
+require('./utils/shallow_clone');
+require('./utils/normalize_fetch_options');
 
 // Load up extra types;
-require("./status_file");
-require("./enums.js");
+require('./status_file');
+require('./enums.js');
 
 // Import extensions
 // [Manual] extensions
-importExtension("filter_registry");
+importExtension('filter_registry');
 {% each %}
-  {% if type != "enum" %}
-    importExtension("{{ filename }}");
+  {% if type != 'enum' %}
+    importExtension('{{ filename }}');
   {% endif %}
 {% endeach %}
 /* jshint ignore:start */
 {% each . as idef %}
-  {% if idef.type != "enum" %}
+  {% if idef.type != 'enum' %}
     {% each idef.functions as fn %}
       {% if fn.useAsOnRootProto %}
 
         // Inherit directly from the original {{idef.jsClassName}} object.
-        _{{ idef.jsClassName }}.{{ fn.jsFunctionName }}.__proto__ =
-          _{{ idef.jsClassName }};
+        Object.setPrototypeOf(
+          _{{ idef.jsClassName }}.{{ fn.jsFunctionName }},
+          _{{ idef.jsClassName }},
+        );
 
         // Ensure we're using the correct prototype.
-        _{{ idef.jsClassName }}.{{ fn.jsFunctionName }}.prototype =
-          _{{ idef.jsClassName }}.prototype;
+        _{{ idef.jsClassName }}.{{ fn.jsFunctionName }}.prototype = _{{ idef.jsClassName }}.prototype;
 
         // Assign the function as the root
-        rawApi.{{ idef.jsClassName }} =
-          _{{ idef.jsClassName }}.{{ fn.jsFunctionName }};
+        rawApi.{{ idef.jsClassName }} = _{{ idef.jsClassName }}.{{ fn.jsFunctionName }};
 
       {% endif %}
     {% endeach %}
@@ -136,7 +135,7 @@ importExtension("filter_registry");
 promisify(exports);
 
 // Set version.
-exports.version = require("../package").version;
+exports.version = require('../package').version;
 
 // Expose Promise implementation.
 exports.Promise = Promise;
