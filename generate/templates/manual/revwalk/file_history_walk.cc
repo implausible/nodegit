@@ -1,3 +1,56 @@
+
+class FileHistoryEvent {
+public:
+  FileHistoryEvent(git_delta_t inputType, bool inputIsMerge = false, std::shared_ptr<git_commit> inputCommit = NULL):
+    type(inputType),
+    existsInCurrentTree(false),
+    isMerge(inputIsMerge),
+    from(NULL),
+    to(NULL),
+    commit(inputCommit) {}
+
+  FileHistoryEvent(char *inputFrom, char *inputTo = NULL):
+    type(GIT_DELTA_RENAMED),
+    existsInCurrentTree(inputFrom != NULL),
+    isMerge(false),
+    from(inputFrom),
+    to(inputTo),
+    commit(NULL) {}
+
+  FileHistoryEvent(git_delta_t inputType):
+    type(inputType),
+    existsInCurrentTree(inputType == GIT_DELTA_ADDED || inputType)
+
+  static std::unique_ptr<FileHistoryEvent> buildHistoryEvent(
+    git_repository *repo,
+    std::shared_ptr<git_commit> currentCommit,
+    git_tree *currentTree,
+    git_tree *parentTree,
+    const char *filePath
+  ) {
+    git_tree_entry *unsafeEntry;
+    if (git_tree_entry_bypath(&unsafeEntry, currentTree, filePath) != GIT_OK) {
+      unsafeEntry = NULL;
+    }
+    std::unique_ptr<git_tree_entry, decltype(&git_tree_entry_free)> currentEntry(unsafeEntry, &git_tree_entry_free);
+    if (git_tree_entry_bypath(&unsafeEntry, parentTree, filePath) != GIT_OK) {
+      unsafeEntry = NULL;
+    }
+    std::unique_ptr<git_tree_entry, decltype(&git_tree_entry_free)> parentEntry(unsafeEntry, &git_tree_entry_free);
+
+    if (!currentEntry && !parentEntry) {
+      return new FileHistoryEvent(
+        GIT_DELTA_UNMODIFIED
+      );
+    }
+  }
+
+  git_delta_t type;
+  bool existsInCurrentTree, isMerge;
+  char *from, *to;
+  std::shared_ptr<git_commit> commit;
+};
+
 NAN_METHOD(GitRevwalk::FileHistoryWalk)
 {
   if (info.Length() == 0 || !info[0]->IsString()) {
@@ -19,7 +72,7 @@ NAN_METHOD(GitRevwalk::FileHistoryWalk)
   String::Utf8Value from_js_file_path(info[0]->ToString());
   baton->file_path = strdup(*from_js_file_path);
   baton->max_count = Nan::To<unsigned int>(info[1]).FromJust();
-  baton->out = new std::vector< std::pair<git_commit *, std::pair<char *, git_delta_t> > *>;
+  baton->out = new std::vector<std::unique_ptr<FileHistoryEvent>>;
   baton->out->reserve(baton->max_count);
   baton->walk = Nan::ObjectWrap::Unwrap<GitRevwalk>(info.This())->GetValue();
 
@@ -34,222 +87,163 @@ NAN_METHOD(GitRevwalk::FileHistoryWalk)
 void GitRevwalk::FileHistoryWalkWorker::Execute()
 {
   git_repository *repo = git_revwalk_repository(baton->walk);
-  git_oid *nextOid = (git_oid *)malloc(sizeof(git_oid));
+  git_oid currentOid;
   git_error_clear();
   for (
-    unsigned int i = 0;
-    i < baton->max_count && (baton->error_code = git_revwalk_next(nextOid, baton->walk)) == GIT_OK;
-    ++i
+    unsigned int revwalkIterations = 0;
+    revwalkIterations < baton->max_count && (baton->error_code = git_revwalk_next(&currentOid, baton->walk)) == GIT_OK;
+    ++revwalkIterations
   ) {
-    // check if this commit has the file
-    git_commit *nextCommit;
-
-    if ((baton->error_code = git_commit_lookup(&nextCommit, repo, nextOid)) != GIT_OK) {
+    git_commit *unsafeCommit;
+    if ((baton->error_code = git_commit_lookup(&unsafeCommit, repo, currentOid)) != GIT_OK) {
       break;
     }
+    std::shared_ptr<git_commit> currentCommit(unsafeCommit, &git_commit_free);
+    unsafeCommit = NULL;
 
-    git_tree *thisTree, *parentTree;
-    if ((baton->error_code = git_commit_tree(&thisTree, nextCommit)) != GIT_OK) {
-      git_commit_free(nextCommit);
+    git_tree *unsafeTree;
+    if ((baton->error_code = git_commit_tree(&unsafeTree, currentCommit.get())) != GIT_OK) {
       break;
     }
+    std::unique_ptr<git_tree, decltype(&git_tree_free)> currentTree(unsafeTree, &git_tree_free);
+    unsafeTree = NULL;
 
-    git_diff *diffs;
-    git_diff_options opts = GIT_DIFF_OPTIONS_INIT;
-    char *file_path = strdup(baton->file_path);
-    opts.pathspec.strings = &file_path;
-    opts.pathspec.count = 1;
-    git_commit *parent;
-    unsigned int parents = git_commit_parentcount(nextCommit);
-    if (parents > 1) {
-      git_commit_free(nextCommit);
+    unsigned int parentCount = git_commit_parentcount(currentCommit);
+    if (parentCount == 0) {
+      git_tree_entry* entry;
+      if (git_tree_entry_bypath(&entry, currentTree.get(), baton->file_path) == GIT_OK) {
+        baton->out->push_back(new FileHistoryEvent(GIT_DELTA_ADDED, std::move(currentCommit)));
+        git_tree_entry_free(entry);
+      }
       continue;
-    } else if (parents == 1) {
-      if ((baton->error_code = git_commit_parent(&parent, nextCommit, 0)) != GIT_OK) {
-        git_commit_free(nextCommit);
+    }
+
+    if (parentCount == 1) {
+      if ((baton->error_code = git_commit_parent(&unsafeCommit, currentCommit.get(), 0)) != GIT_OK) {
         break;
       }
-      if (
-        (baton->error_code = git_commit_tree(&parentTree, parent)) != GIT_OK ||
-        (baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, &opts)) != GIT_OK
-      ) {
-        git_commit_free(nextCommit);
-        git_commit_free(parent);
+      std::unique_ptr<git_commit, decltype(&git_commit_free)> parentCommit(unsafeCommit, &git_commit_free);
+      unsafeCommit = NULL;
+
+      if ((baton->error_code = git_commit_tree(&unsafeTree, parentCommit.get())) != GIT_OK) {
         break;
       }
-    } else {
-      if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, NULL, thisTree, &opts)) != GIT_OK) {
-        git_commit_free(nextCommit);
+      std::unique_ptr<git_tree, decltype(&git_tree_free)> parentTree(unsafeTree, &git_tree_free);
+      unsafeTree = NULL;
+
+      std::unique_ptr<FileHistoryEvent> fileHistoryEvent = FileHistoryEvent::buildHistoryEvent(
+        repo,
+        std::move(currentCommit),
+        currentTree.get(),
+        parentTree.get(),
+        baton->file_path
+      );
+
+      if (fileHistoryEvent == NULL) {
+        break;
+      }
+
+      if (fileHistoryEvent->type != GIT_DELTA_UNMODIFIED) {
+        baton->out->push_back(std::move(fileHistoryEvent));
+      }
+
+      continue;
+    }
+
+    std::pair<bool, unsigned int> firstMatchingParentIndex(false, 0);
+    bool fileExistsInCurrent = false, fileExistsInSomeParent = false;
+    for (unsigned int parentIndex = 0; parentIndex < parentCount; ++parentIndex) {
+      if ((baton->error_code = git_commit_parent(&unsafeCommit, currentCommit.get(), parentIndex)) != GIT_OK) {
+        break;
+      }
+      std::unique_ptr<git_commit, decltype(&git_commit_free)> parentCommit(unsafeCommit, &git_commit_free);
+      unsafeCommit = NULL;
+
+      if ((baton->error_code = git_commit_tree(&unsafeTree, parentCommit.get())) != GIT_OK) {
+        break;
+      }
+      std::unique_ptr<git_tree, decltype(&git_tree_free)> parentTree(unsafeTree, &git_tree_free);
+      unsafeTree = NULL;
+
+      std::unique_ptr<FileHistoryEvent> fileHistoryEvent = FileHistoryEvent::buildHistoryEvent(
+        repo,
+        currentCommit,
+        currentTree.get(),
+        parentTree.get(),
+        baton->file_path
+      );
+
+      switch (fileHistoryEvent->type) {
+        case GIT_DELTA_ADDED:
+        case GIT_DELTA_MODIFIED: {
+          fileExistsInCurrent = true;
+          break;
+        }
+        case GIT_DELTA_DELETED: {
+          fileExistsInSomeParent = true;
+          break;
+        }
+        case GIT_DELTA_RENAMED: {
+          if (fileHistoryEvent->existsInCurrentTree) {
+            fileExistsInCurrent = true;
+          } else {
+            fileExistsInSomeParent = true;
+          }
+          break;
+        }
+        case GIT_DELTA_UNMODIFIED: {
+          if (fileHistoryEvent->existsInCurrentTree) {
+            fileExistsInCurrent = true;
+            fileExistsInSomeParent = true;
+          }
+          firstMatchingParentIndex = std::make_pair(true, parentIndex);
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+
+      if (firstMatchingParentIndex.first) {
         break;
       }
     }
 
-    free(file_path);
-    opts.pathspec.strings = NULL;
-    opts.pathspec.count = 0;
-
-    bool flag = false;
-    bool doRenamedPass = false;
-    unsigned int numDeltas = git_diff_num_deltas(diffs);
-    for (unsigned int j = 0; j < numDeltas; ++j) {
-      git_patch *nextPatch;
-      baton->error_code = git_patch_from_diff(&nextPatch, diffs, j);
-
-      if (baton->error_code < GIT_OK) {
-        break;
+    if (!firstMatchingParentIndex.first) {
+      assert(fileExistsInCurrent || fileExistsInSomeParent);
+      git_delta_t mergeType;
+      if (fileExistsInCurrent && fileExistsInSomeParent) {
+        mergeType = GIT_DELTA_MODIFIED;
+      } else if (fileExistsInCurrent) {
+        mergeType = GIT_DELTA_ADDED;
+      } else if (fileExistsInSomeParent) {
+        mergeType = GIT_DELTA_DELETED;
       }
 
-      if (nextPatch == NULL) {
+      std::unique_ptr<FileHistoryEvent> fileHistoryEvent = new FileHistoryEvent(
+        mergeType,
+        true,
+        std::move(currentCommit)
+      );
+      baton->out->push_back(std::move(fileHistoryEvent));
+      continue;
+    }
+
+    assert(firstMatchingParentIndex.first);
+    for (unsigned int parentIndex = 0; parentIndex < parentCount; ++parentIndex) {
+      if (parentIndex == firstMatchingParentIndex.second) {
         continue;
       }
 
-      const git_diff_delta *delta = git_patch_get_delta(nextPatch);
-      bool isEqualOldFile = !strncmp(delta->old_file.path, baton->file_path, strlen(baton->file_path));
-      bool isEqualNewFile = !strncmp(delta->new_file.path, baton->file_path, strlen(baton->file_path));
-
-      if (isEqualNewFile) {
-        if (delta->status == GIT_DELTA_ADDED || delta->status == GIT_DELTA_DELETED) {
-          doRenamedPass = true;
-          break;
-        }
-        std::pair<git_commit *, std::pair<char *, git_delta_t> > *historyEntry;
-        if (!isEqualOldFile) {
-          historyEntry = new std::pair<git_commit *, std::pair<char *, git_delta_t> >(
-            nextCommit,
-            std::pair<char *, git_delta_t>(strdup(delta->old_file.path), delta->status)
-          );
-        } else {
-          historyEntry = new std::pair<git_commit *, std::pair<char *, git_delta_t> >(
-            nextCommit,
-            std::pair<char *, git_delta_t>(strdup(delta->new_file.path), delta->status)
-          );
-        }
-        baton->out->push_back(historyEntry);
-        flag = true;
-      }
-
-      git_patch_free(nextPatch);
-
-      if (flag) {
-        break;
-      }
-    }
-
-    if (doRenamedPass) {
-      git_diff_free(diffs);
-
-      if (parents == 1) {
-        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, parentTree, thisTree, NULL)) != GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
-        if ((baton->error_code = git_diff_find_similar(diffs, NULL)) != GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
-      } else {
-        if ((baton->error_code = git_diff_tree_to_tree(&diffs, repo, NULL, thisTree, NULL)) != GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
-        if((baton->error_code = git_diff_find_similar(diffs, NULL)) != GIT_OK) {
-          git_commit_free(nextCommit);
-          break;
-        }
-      }
-
-      flag = false;
-      numDeltas = git_diff_num_deltas(diffs);
-      for (unsigned int j = 0; j < numDeltas; ++j) {
-        git_patch *nextPatch;
-        baton->error_code = git_patch_from_diff(&nextPatch, diffs, j);
-
-        if (baton->error_code < GIT_OK) {
-          break;
-        }
-
-        if (nextPatch == NULL) {
-          continue;
-        }
-
-        const git_diff_delta *delta = git_patch_get_delta(nextPatch);
-        bool isEqualOldFile = !strncmp(delta->old_file.path, baton->file_path, strlen(baton->file_path));
-        bool isEqualNewFile = !strncmp(delta->new_file.path, baton->file_path, strlen(baton->file_path));
-        int oldLen = strlen(delta->old_file.path);
-        int newLen = strlen(delta->new_file.path);
-        char *outPair = new char[oldLen + newLen + 2];
-        strcpy(outPair, delta->new_file.path);
-        outPair[newLen] = '\n';
-        outPair[newLen + 1] = '\0';
-        strcat(outPair, delta->old_file.path);
-
-        if (isEqualNewFile) {
-          std::pair<git_commit *, std::pair<char *, git_delta_t> > *historyEntry;
-          if (!isEqualOldFile || delta->status == GIT_DELTA_RENAMED) {
-            historyEntry = new std::pair<git_commit *, std::pair<char *, git_delta_t> >(
-              nextCommit,
-              std::pair<char *, git_delta_t>(strdup(outPair), delta->status)
-            );
-          } else {
-            historyEntry = new std::pair<git_commit *, std::pair<char *, git_delta_t> >(
-              nextCommit,
-              std::pair<char *, git_delta_t>(strdup(delta->new_file.path), delta->status)
-            );
-          }
-          baton->out->push_back(historyEntry);
-          flag = true;
-        } else if (isEqualOldFile) {
-          std::pair<git_commit *, std::pair<char *, git_delta_t> > *historyEntry;
-          historyEntry = new std::pair<git_commit *, std::pair<char *, git_delta_t> >(
-            nextCommit,
-            std::pair<char *, git_delta_t>(strdup(outPair), delta->status)
-          );
-          baton->out->push_back(historyEntry);
-          flag = true;
-        }
-
-        delete[] outPair;
-
-        git_patch_free(nextPatch);
-
-        if (flag) {
-          break;
-        }
-      }
-    }
-
-    git_diff_free(diffs);
-
-    if (!flag && nextCommit != NULL) {
-      git_commit_free(nextCommit);
-    }
-
-    if (baton->error_code != GIT_OK) {
-      break;
+      const git_oid *parentOid = git_commit_parent_id(currentCommit.get());
+      assert(parentOid != NULL);
+      git_revwalk_hide(baton->walk, parentOid);
     }
   }
 
-  free(nextOid);
-
-  if (baton->error_code != GIT_OK) {
-    if (baton->error_code != GIT_ITEROVER) {
-      baton->error = git_error_dup(git_error_last());
-
-      while(!baton->out->empty())
-      {
-        std::pair<git_commit *, std::pair<char *, git_delta_t> > *pairToFree = baton->out->back();
-        baton->out->pop_back();
-        git_commit_free(pairToFree->first);
-        free(pairToFree->second.first);
-        free(pairToFree);
-      }
-
-      delete baton->out;
-
-      baton->out = NULL;
-    }
-  } else {
-    baton->error_code = GIT_OK;
+  if (baton->error_code != GIT_OK && baton->error_code != GIT_ITEROVER) {
+    // Something went wrong in our loop, discard everything in the async worker
+    baton->out->clear();
   }
 }
 
@@ -277,6 +271,8 @@ void GitRevwalk::FileHistoryWalkWorker::HandleOKCallback()
       free(batonResult->second.first);
       free(batonResult);
     }
+
+    Nan::Set(result, Nan::New("reachedEndOfHistory").ToLocalChecked(), Nan::New(baton->error_code == GIT_ITEROVER));
 
     Local<v8::Value> argv[2] = {
       Nan::Null(),
