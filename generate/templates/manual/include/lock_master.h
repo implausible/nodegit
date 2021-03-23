@@ -112,6 +112,12 @@ namespace nodegit {
     ObjectToLock(owner);
   }
 
+  template<> inline void LockMaster::AddLocks(const git_tree *tree) {
+    // when using a commit, lock the repo
+    const void *owner = git_tree_owner(tree);
+    ObjectToLock(owner);
+  }
+
   // ... more locking rules would go here.  According to an analysis of idefs.json,
   // the following types are passed as non-const * and may require locking
   // (some likely, some probably not):

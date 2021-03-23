@@ -855,6 +855,28 @@
           "type": "int"
         },
         "group": "status_list"
+      },
+      "git_tree_get_paths": {
+        "args": [
+          {
+            "name": "tree",
+            "type": "git_tree *"
+          },
+          {
+            "name": "out",
+            "type": "std::vector<std::string> *"
+          }
+        ],
+        "type": "function",
+        "isManual": true,
+        "cFile": "generate/templates/manual/tree/get_paths.cc",
+        "isAsync": true,
+        "isPrototypeMethod": true,
+        "group": "tree",
+        "return": {
+          "type": "int",
+          "isErrorCode": true
+        }
       }
     },
     "groups": [
@@ -1062,6 +1084,12 @@
           "git_status_list_free",
           "git_status_list_get_perfdata",
           "git_status_list_new"
+        ]
+      ],
+      [
+        "tree",
+        [
+          "git_tree_get_paths"
         ]
       ],
       [
