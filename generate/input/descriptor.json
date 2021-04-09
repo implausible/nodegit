@@ -1203,6 +1203,9 @@
         "git_diff_buffers": {
           "ignore": true
         },
+        "git_diff_calculate_s_e_s": {
+          "jsFunctionName": "calculateSES"
+        },
         "git_diff_commit_as_email": {
           "ignore": true
         },

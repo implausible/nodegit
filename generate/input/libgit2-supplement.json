@@ -135,6 +135,48 @@
           "isErrorCode": true
         }
       },
+      "git_diff_calculate_s_e_s": {
+        "type": "function",
+        "isManual": true,
+        "args": [
+          {
+            "name": "out",
+            "type": "void *"
+          },
+          {
+            "name": "repo",
+            "type": "git_repository *"
+          },
+          {
+            "name": "new_blob",
+            "type": "git_blob *"
+          },
+          {
+            "name": "old_blob",
+            "type": "git_blob *"
+          },
+          {
+            "name": "diff_flags",
+            "type": "uint32_t"
+          },
+          {
+            "name": "context_lines",
+            "type": "uint32_t"
+          },
+          {
+            "name": "was_binary",
+            "type": "bool"
+          }
+        ],
+        "cFile": "generate/templates/manual/diff/calculate_ses.cc",
+        "isAsync": true,
+        "isPrototypeMethod": false,
+        "return": {
+          "type": "int",
+          "isErrorCode": true
+        },
+        "group": "diff"
+      },
       "git_diff_get_perfdata": {
         "file": "sys/diff.h",
         "args": [
@@ -883,6 +925,7 @@
       [
         "diff",
         [
+          "git_diff_calculate_s_e_s",
           "git_diff_get_perfdata"
         ]
       ],
