@@ -6,6 +6,7 @@ var exec = require('../utils/execPromise');
 var NodeGit = require('..');
 
 var workdirPath = local("repos/workdir");
+var constantRepoPath = local("repos/constant");
 
 before(function() {
   this.timeout(350000);
@@ -46,6 +47,9 @@ before(function() {
     .then(function() {
       return fse.writeFile(local("home", ".gitconfig"),
         "[user]\n  name = John Doe\n  email = johndoe@example.com");
+    })
+    .then(function() {
+      return exec("git clone " + url + " " + constantRepoPath);
     });
 });
 

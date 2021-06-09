@@ -12,6 +12,7 @@ describe("Repository", function() {
   var Signature = NodeGit.Signature;
 
   var reposPath = local("../repos/workdir");
+  var constantRepoPath = local("../repos/constant");
   var newRepoPath = local("../repos/newrepo");
   var emptyRepoPath = local("../repos/empty");
 
@@ -21,12 +22,14 @@ describe("Repository", function() {
     return Repository.open(reposPath)
       .then(function(repository) {
         test.repository = repository;
-      })
-      .then(function() {
         return Repository.open(emptyRepoPath);
       })
       .then(function(emptyRepo) {
         test.emptyRepo = emptyRepo;
+        return Repository.open(constantRepoPath);
+      })
+      .then(function(constantRepo) {
+        test.constantRepo = constantRepo;
       });
   });
 
@@ -352,7 +355,7 @@ describe("Repository", function() {
   });
 
   it("can obtain statistics from a valid repository", function() {
-    return this.repository.statistics()
+    return this.constantRepo.statistics()
     .then(function(analysisReport) {
 
       assert.equal(analysisReport.repositorySize.commits.count, 992);
@@ -363,7 +366,7 @@ describe("Repository", function() {
       assert.equal(analysisReport.repositorySize.blobs.count, 4149);
       assert.equal(analysisReport.repositorySize.blobs.size, 48489622);
       assert.equal(analysisReport.repositorySize.annotatedTags.count, 1);
-      assert.equal(analysisReport.repositorySize.references.count, 10);
+      assert.equal(analysisReport.repositorySize.references.count, 8);
 
       assert.equal(analysisReport.biggestObjects.commits.maxSize, 956);
       assert.equal(analysisReport.biggestObjects.commits.maxParents, 2);
